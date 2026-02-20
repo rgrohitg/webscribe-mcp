@@ -16,6 +16,12 @@
   ],
   "main": "build/index.js",
   "type": "module",
+  "files": [
+    "build"
+  ],
+  "bin": {
+    "universal-docs-mcp": "build/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
