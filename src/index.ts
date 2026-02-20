@@ -41,7 +41,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 inputSchema: {
                     type: "object",
                     properties: {
-                        url: { type: "string" }
+                        url: { type: "string" },
+                        version: {
+                            type: "string",
+                            description: "The targeted version of the documentation (e.g., 'latest', 'v1', 'v2'). Defaults to 'latest'."
+                        }
                     },
                     required: ["url"]
                 }
@@ -53,7 +57,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     type: "object",
                     properties: {
                         start_url: { type: "string" },
-                        max_pages: { type: "number", default: 10 }
+                        max_pages: { type: "number", default: 10 },
+                        version: {
+                            type: "string",
+                            description: "The targeted version of the documentation (e.g., 'latest', 'v1', 'v2'). Defaults to 'latest'."
+                        }
                     },
                     required: ["start_url"]
                 }
@@ -64,7 +72,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 inputSchema: {
                     type: "object",
                     properties: {
-                        query: { type: "string" }
+                        query: { type: "string" },
+                        version: {
+                            type: "string",
+                            description: "Explicitly filter search results to a specific documentation version (e.g., 'v17')."
+                        }
                     },
                     required: ["query"]
                 }
@@ -78,9 +90,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
         if (request.params.name === "read_and_extract_page") {
             const url = request.params.arguments?.url as string;
+            const version = (request.params.arguments?.version as string) || "latest";
             if (!url) throw new Error("url is required");
 
-            const markdown = await extractSinglePage(url);
+            const markdown = await extractSinglePage(url, version);
             return {
                 content: [{ type: "text", text: markdown }]
             };
@@ -89,9 +102,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (request.params.name === "crawl_documentation_site") {
             const startUrl = request.params.arguments?.start_url as string;
             const maxPages = (request.params.arguments?.max_pages as number) || 10;
+            const version = (request.params.arguments?.version as string) || "latest";
             if (!startUrl) throw new Error("start_url is required");
 
-            const crawledUrls = await runCrawler(startUrl, maxPages);
+            const crawledUrls = await runCrawler(startUrl, version, maxPages);
             return {
                 content: [{ type: "text", text: `Successfully crawled ${crawledUrls.length} pages:\n${crawledUrls.join('\n')}` }]
             };
@@ -99,15 +113,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         if (request.params.name === "search_crawled_docs") {
             const query = request.params.arguments?.query as string;
+            const version = request.params.arguments?.version as string | undefined;
             if (!query) throw new Error("query is required");
 
-            const results = await searchLocalDatasets(query);
+            const results = await searchLocalDatasets(query, version);
 
             if (results.length === 0) {
                 return { content: [{ type: "text", text: "No results found." }] };
             }
 
-            const formattedResults = results.map(r => `## ${r.title} (${r.url})\n\n${r.content}`).join('\n\n---\n\n');
+            // Expose the version directly in the LLM response context so the AI knows which version it's reading
+            const formattedResults = results.map(r => `## ${r.title} (Version: ${r.version}) - ${r.url}\n\n${r.content}`).join('\n\n---\n\n');
             return {
                 content: [{ type: "text", text: formattedResults }]
             };

@@ -7,7 +7,7 @@ Under the hood, this server uses [Crawlee](https://crawlee.dev/) with **Playwrig
 ## Features
 - **Headless Browser Crawling**: Uses Playwright to render JavaScript-heavy sites before extraction.
 - **Pristine Markdown Parsing**: Uses Mozilla's Readability to strip headers and footers, combined with Turndown for clean Markdown generation.
-- **Local Dataset Caching**: Extracted pages are locally cached to prevent redundant, expensive network requests.
+- **Persistent SQLite Storage**: Extracted pages are locally cached into a blazing fast `~/.universal-docs-mcp/documents.db` SQLite database to survive npm upgrades and serve instantaneous LLM search queries.
 - **Same-Domain Constraint**: Built-in breadth-first crawling constraints specifically locked to the target documentation domain.
 
 ## Installation

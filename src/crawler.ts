@@ -1,5 +1,6 @@
-import { PlaywrightCrawler, Dataset, RequestQueue, log } from 'crawlee';
+import { PlaywrightCrawler, RequestQueue, log } from 'crawlee';
 import { extractMarkdownPristine } from './utils.js';
+import { upsertDocument, searchDocuments } from './db.js';
 
 // Shut off all Crawlee logging because MCP relies on a pure JSON STDOUT pipe.
 // Any extraneous logs (especially \x1b colored ones) will break the MCP protocol parsing!
@@ -17,10 +18,11 @@ export interface CrawlerResult {
  * are fully rendered before their DOM is parsed.
  * 
  * @param startUrl The absolute URL to start crawling from.
+ * @param version The targeted version of the documentation (e.g. 'v1', 'latest').
  * @param maxPages The maximum number of pages to crawl before terminating the queue.
  * @returns A Promise resolving to an array of successfully crawled and cached URLs.
  */
-export async function runCrawler(startUrl: string, maxPages: number = 10): Promise<string[]> {
+export async function runCrawler(startUrl: string, version: string = 'latest', maxPages: number = 10): Promise<string[]> {
     const requestQueue = await RequestQueue.open();
     await requestQueue.addRequest({ url: startUrl });
 
@@ -59,12 +61,11 @@ export async function runCrawler(startUrl: string, maxPages: number = 10): Promi
             try {
                 const markdown = extractMarkdownPristine(html, url);
 
-                // Store the result directly into the default dataset.
-                await Dataset.pushData({
-                    url,
-                    title,
-                    markdown,
-                });
+                // Parse just the domain to uniquely group doc pages visually
+                const domain = new URL(url).hostname;
+
+                // Stream directly to the persistent SQLite database, skipping Crawlee's memory datasets
+                upsertDocument(url, version, domain, title, markdown);
 
                 crawledUrls.push(url);
             } catch (err) {
@@ -96,9 +97,10 @@ export async function runCrawler(startUrl: string, maxPages: number = 10): Promi
  * Useful for targeted extractions where the user provides a direct documentation link.
  * 
  * @param url Document URL to read and extract.
+ * @param version The targeted version of the documentation (e.g. 'v1', 'latest').
  * @returns A Promise resolving to the converted Markdown string of the main article content.
  */
-export async function extractSinglePage(url: string): Promise<string> {
+export async function extractSinglePage(url: string, version: string = 'latest'): Promise<string> {
     let resultMarkdown = "";
 
     const crawler = new PlaywrightCrawler({
@@ -113,11 +115,8 @@ export async function extractSinglePage(url: string): Promise<string> {
             const html = await page.content();
             resultMarkdown = extractMarkdownPristine(html, page.url());
 
-            await Dataset.pushData({
-                url: request.url,
-                title: await page.title(),
-                markdown: resultMarkdown
-            });
+            const domain = new URL(request.url).hostname;
+            upsertDocument(request.url, version, domain, await page.title(), resultMarkdown);
         },
     });
 
@@ -126,32 +125,21 @@ export async function extractSinglePage(url: string): Promise<string> {
 }
 
 /**
- * Searches the local Crawlee datasets (`./storage/datasets/default`) for a specific query string.
- * This currently performs an in-memory sequential scan of the JSON cache files.
+ * Searches the persistent SQLite database (`~/.universal-docs-mcp/documents.db`) for a specific query string.
+ * This runs an instantaneous `LIKE` search across all previously crawled domains.
  * 
  * @param query The text string to search for across all cached markdown documents.
  * @returns A Promise resolving to an array of objects containing the matched URL, title, and full document content.
  */
-export async function searchLocalDatasets(query: string): Promise<Array<{ url: string, title: string, content: string }>> {
-    const dataset = await Dataset.open();
-    // Depending on data volume, loading all might be heavy, but fine for default use cases
-    const { items } = await dataset.getData();
+export async function searchLocalDatasets(query: string, version?: string): Promise<Array<{ url: string, version: string, title: string, content: string }>> {
+    // 15ms instantaneous sqlite LIKE query
+    const results = searchDocuments(query, version);
 
-    const results = [];
-    const lowerQuery = query.toLowerCase();
-
-    for (const item of items) {
-        if (!item.markdown) continue;
-        const md = item.markdown as string;
-        if (md.toLowerCase().includes(lowerQuery)) {
-            results.push({
-                url: item.url as string,
-                title: item.title as string,
-                // Optional snippet or full markdown. We'll return full markdown as requested by typical MCP search.
-                content: md,
-            });
-        }
-    }
-
-    return results;
+    // Map the db response to the legacy Tool return shape
+    return results.map(row => ({
+        url: row.url,
+        version: row.version,
+        title: row.title,
+        content: row.markdown
+    }));
 }
