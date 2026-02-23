@@ -33,14 +33,18 @@ db.exec(`
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (url, version)
     );
-
-    -- Migrate old data if the legacy 'documents' table exists
-    INSERT OR IGNORE INTO documents_v2 (url, domain, title, markdown, timestamp)
-    SELECT url, domain, title, markdown, timestamp FROM documents WHERE EXISTS (SELECT name FROM sqlite_master WHERE type='table' AND name='documents');
-
-    -- Drop the legacy table
-    DROP TABLE IF EXISTS documents;
 `);
+
+// Conditionally migrate old data if the legacy 'documents' table exists to avoid SQLite compilation errors
+const hasLegacyTable = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='documents'`).get();
+if (hasLegacyTable) {
+    db.exec(`
+        INSERT OR IGNORE INTO documents_v2 (url, domain, title, markdown, timestamp)
+        SELECT url, domain, title, markdown, timestamp FROM documents;
+        
+        DROP TABLE IF EXISTS documents;
+    `);
+}
 
 /**
  * Inserts or completely overwrites an existing document cache for a specific version.
@@ -62,12 +66,15 @@ export function upsertDocument(url: string, version: string, domain: string, tit
  * Optionally filters the search exclusively to a specific documentation version.
  */
 export function searchDocuments(query: string, version?: string): Array<{ url: string, version: string, title: string, markdown: string }> {
-    let sql = `
-        SELECT url, version, title, markdown 
-        FROM documents_v2 
-        WHERE (markdown LIKE ? OR title LIKE ?)
-    `;
-    const params: any[] = [`%${query}%`, `%${query}%`];
+    // Split into individual words so "button usage" matches pages containing both words
+    const terms = query.trim().split(/\s+/).filter(Boolean);
+
+    if (terms.length === 0) return [];
+
+    // Build AND conditions: each term must appear in markdown OR title
+    const conditions = terms.map(() => `(markdown LIKE ? OR title LIKE ?)`).join(' AND ');
+    let sql = `SELECT url, version, title, markdown FROM documents_v2 WHERE ${conditions}`;
+    const params: any[] = terms.flatMap(t => [`%${t}%`, `%${t}%`]);
 
     if (version) {
         sql += ` AND version = ?`;

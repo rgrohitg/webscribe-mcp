@@ -1,145 +1,331 @@
-import { PlaywrightCrawler, RequestQueue, log } from 'crawlee';
+import { chromium, Browser, Page } from 'playwright';
 import { extractMarkdownPristine } from './utils.js';
 import { upsertDocument, searchDocuments } from './db.js';
 
-// Shut off all Crawlee logging because MCP relies on a pure JSON STDOUT pipe.
-// Any extraneous logs (especially \x1b colored ones) will break the MCP protocol parsing!
-log.setLevel(log.LEVELS.OFF);
+/**
+ * Generic sub-tab suffixes to probe for each discovered component URL.
+ * Works for Salt DS, MUI, Ant Design, Chakra and any similar tabbed docs site.
+ */
+const SUB_TAB_SUFFIXES = ['/usage', '/examples', '/accessibility', '/api', '/props', '/code'];
 
-export interface CrawlerResult {
-    url: string;
-    title: string;
-    markdown: string;
+/**
+ * Given a normalised URL (no trailing slash), generate sub-tab variant URLs.
+ * Only generates variants if the URL doesn't already end with a known suffix.
+ */
+function expandSubTabUrls(url: string): string[] {
+    const normalised = url.replace(/\/$/, '');
+    const alreadyHasSuffix = SUB_TAB_SUFFIXES.some(s => normalised.endsWith(s));
+    if (alreadyHasSuffix) return [];
+    return SUB_TAB_SUFFIXES.map(s => normalised + s);
 }
 
 /**
- * Runs the crawler on a specific starting URL using a Breadth-First Search strategy.
- * This utilizes Playwright in headless mode to ensure SPAs (React, Vue, Angular) 
- * are fully rendered before their DOM is parsed.
- * 
- * @param startUrl The absolute URL to start crawling from.
- * @param version The targeted version of the documentation (e.g. 'v1', 'latest').
- * @param maxPages The maximum number of pages to crawl before terminating the queue.
- * @returns A Promise resolving to an array of successfully crawled and cached URLs.
+ * Generically reveals hidden content on any docs page before extraction.
+ *
+ * Many documentation sites (Salt DS, MUI, Storybook, Ant Design, Chakra …)
+ * hide code examples behind toggle buttons like "Show code", "<>" icons,
+ * collapsed <details> elements, or accordion panels.
+ *
+ * This function clicks ALL such interactive disclosure elements so their
+ * content is present in the DOM when we call page.content().
+ *
+ * Strategy:
+ *  1. Click <details> elements that are not yet open.
+ *  2. Click any button/element whose visible text or aria-label suggests it
+ *     expands or reveals content (case-insensitive, works across sites).
+ *  3. Small settle delay so async panel animations resolve.
  */
-export async function runCrawler(startUrl: string, version: string = 'latest', maxPages: number = 10): Promise<string[]> {
-    const requestQueue = await RequestQueue.open();
-    await requestQueue.addRequest({ url: startUrl });
+async function revealHiddenContent(page: Page): Promise<void> {
+    try {
+        // 1. Open all collapsed <details> elements
+        await page.$$eval('details:not([open])', (els) =>
+            els.forEach((el) => el.setAttribute('open', ''))
+        );
 
-    const crawledUrls: string[] = [];
+        // 2. Click all visible buttons / links that look like "show / expand / view code"
+        //    Covers: Salt DS "Show code", MUI "<>", Storybook "Show code",
+        //    Ant Design "Show code", Chakra "Show code", generic "Expand"
+        const revealSelectors = [
+            // Text-based matches (works across most sites)
+            'button:not([disabled])',
+            '[role="button"]:not([disabled])',
+            // Summary elements inside details (already handled above, but belt-and-braces)
+            'summary',
+        ];
 
-    const crawler = new PlaywrightCrawler({
-        requestQueue,
-        maxRequestsPerCrawl: maxPages,
+        // Visible text patterns that indicate "reveal" intent
+        const revealPattern =
+            /^(show\s*(code|source|example|all|more)|expand|view\s*(code|source)|<>|\{\s*\}|toggle\s*code|see\s*(code|example))$/i;
 
-        // Playwright specific configurations
-        headless: true,
-        navigationTimeoutSecs: 30,
-
-        // Request handler runs for each page
-        async requestHandler({ request, page, enqueueLinks, log }) {
-            log.info(`Processing ${request.url}...`);
-
-            // Wait for network idle to ensure SPAs (like Storybook, React) are loaded.
-            await page.waitForLoadState('networkidle');
-
-            // Attempt to hide common cookie banners/overlays before extraction
-            await page.evaluate(() => {
-                const selectors = [
-                    '#cookie-banner', '.cookie-banner', '#onetrust-consent-sdk',
-                    '.overlay', '.modal', '[id*="cookie"]', '[class*="cookie"]'
-                ];
-                selectors.forEach(sel => {
-                    document.querySelectorAll(sel).forEach(el => (el as HTMLElement).style.display = 'none');
-                });
+        // Collect all candidate elements and click those matching the pattern
+        await page.evaluate((patternSrc) => {
+            const pattern = new RegExp(patternSrc, 'i');
+            const candidates = document.querySelectorAll(
+                'button:not([disabled]), [role="button"]:not([disabled]), summary'
+            );
+            candidates.forEach((el) => {
+                const text = (el.textContent ?? '').trim();
+                const label = el.getAttribute('aria-label') ?? '';
+                const title = el.getAttribute('title') ?? '';
+                if (pattern.test(text) || pattern.test(label) || pattern.test(title)) {
+                    (el as HTMLElement).click();
+                }
             });
+        }, revealPattern.source);
 
-            const title = await page.title();
-            const html = await page.content();
-            const url = page.url();
+        // 3. Short settle: let panel animations and async renders complete
+        await page.waitForTimeout(600);
+    } catch {
+        // Never let content-reveal errors abort the crawl
+    }
+}
 
-            try {
-                const markdown = extractMarkdownPristine(html, url);
+/**
+ * Visits a single page with Playwright, waits for SPA hydration,
+ * extracts markdown, upserts to DB, and returns the markdown string.
+ */
+async function visitPage(
+    page: Page,
+    url: string,
+    version: string,
+): Promise<string | null> {
+    try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {
+            // networkidle may time-out on some SPAs — content is usually ready anyway
+        });
 
-                // Parse just the domain to uniquely group doc pages visually
-                const domain = new URL(url).hostname;
+        // Reveal any hidden/collapsed content (show-code buttons, details, accordions)
+        await revealHiddenContent(page);
 
-                // Stream directly to the persistent SQLite database, skipping Crawlee's memory datasets
-                upsertDocument(url, version, domain, title, markdown);
+        const html = await page.content();
+        const markdown = extractMarkdownPristine(html, url);
 
+        // Skip near-empty pages (404s, redirects, empty tabs)
+        if (markdown.trim().length < 50) return null;
+
+        const title = await page.title();
+        const domain = new URL(url).hostname;
+        upsertDocument(url, version, domain, title, markdown);
+        return markdown;
+    } catch (err) {
+        process.stderr.write(`[crawler] Failed to visit ${url}: ${err}\n`);
+        return null;
+    }
+}
+
+/**
+ * BFS crawler — starts from startUrl, follows same-hostname links up to maxPages.
+ * Optionally expands sub-tab variants (/usage, /examples, etc.) for every URL found.
+ *
+ * @param startUrl   Absolute URL to begin from.
+ * @param version    Documentation version label (e.g. 'latest', 'v18').
+ * @param maxPages   Maximum pages to crawl before stopping.
+ * @param urlGlob    Optional glob-like prefix filter (e.g. `*\/components\/**` is treated
+ *                   as a simple substring match against the pathname).
+ * @param expandTabs Whether to auto-enqueue sub-tab suffixes for every URL found.
+ * @returns Array of successfully crawled URLs.
+ */
+export async function runCrawler(
+    startUrl: string,
+    version: string = 'latest',
+    maxPages: number = 10,
+    urlGlob?: string,
+    expandTabs: boolean = true,
+): Promise<string[]> {
+    const browser: Browser = await chromium.launch({ headless: true });
+    const crawledUrls: string[] = [];
+    const visited = new Set<string>();
+    const queue: string[] = [startUrl];
+
+    if (expandTabs) {
+        expandSubTabUrls(startUrl).forEach(u => queue.push(u));
+    }
+
+    const startHostname = new URL(startUrl).hostname;
+
+    try {
+        const page = await browser.newPage();
+
+        while (queue.length > 0 && crawledUrls.length < maxPages) {
+            const url = queue.shift()!;
+            const normalised = url.replace(/\/$/, '');
+            if (visited.has(normalised)) continue;
+            visited.add(normalised);
+
+            const markdown = await visitPage(page, url, version);
+            if (markdown) {
                 crawledUrls.push(url);
-            } catch (err) {
-                log.error(`Failed to extract markdown from ${url}: ${err}`);
+
+                if (expandTabs) {
+                    expandSubTabUrls(normalised).forEach(u => {
+                        if (!visited.has(u)) queue.push(u);
+                    });
+                }
             }
 
-            // Enqueue links that share the same base domain
-            // We use strategy 'same-hostname' to prevent wandering to external links.
-            await enqueueLinks({
-                strategy: 'same-hostname',
-                // We only enqueue general 'a' tags, excluding common static assets.
-                globs: ['http?(s)://**/*'],
-            });
-        },
+            // Discover same-hostname links on the page
+            try {
+                const links: string[] = await page.$$eval('a[href]', (anchors) =>
+                    anchors
+                        .map((a) => (a as HTMLAnchorElement).href)
+                        .filter((h) => h && !h.startsWith('javascript'))
+                );
 
-        // Handle failed requests
-        failedRequestHandler({ request, log }) {
-            log.error(`Request ${request.url} failed completely.`);
-        },
-    });
+                for (const link of links) {
+                    try {
+                        const u = new URL(link);
+                        if (u.hostname !== startHostname) continue;
+                        if (visited.has(u.href.replace(/\/$/, ''))) continue;
+                        // Apply URL glob filter if provided (simple path substring match)
+                        if (urlGlob) {
+                            const globPath = urlGlob.replace(/\*\*/g, '');
+                            if (!u.pathname.includes(globPath.replace(/\//g, ''))) continue;
+                        }
+                        queue.push(u.href);
+                    } catch { /* malformed URL — skip */ }
+                }
+            } catch { /* page navigated away or errored */ }
+        }
 
-    await crawler.run();
+        await page.close();
+    } finally {
+        await browser.close();
+    }
 
     return crawledUrls;
 }
 
 /**
- * Extracts a single page without enqueuing links or saving to the global dataset search cache.
- * Useful for targeted extractions where the user provides a direct documentation link.
- * 
- * @param url Document URL to read and extract.
- * @param version The targeted version of the documentation (e.g. 'v1', 'latest').
- * @returns A Promise resolving to the converted Markdown string of the main article content.
+ * Smart component-docs crawler.
+ *
+ * Phase 1 — Opens the index page (e.g. /salt/components/) and discovers all
+ *            component links one level deep, stripping trailing /index suffixes.
+ * Phase 2 — Crawls every component URL + all sub-tab variants up to maxPages.
+ *
+ * Works generically for Salt DS, MUI, Ant Design, Chakra, and any similar site.
+ *
+ * @param indexUrl  Component listing page (e.g. https://saltdesignsystem.com/salt/components/)
+ * @param version   Documentation version label.
+ * @param maxPages  Maximum pages to crawl.
+ * @returns List of successfully crawled URLs.
  */
-export async function extractSinglePage(url: string, version: string = 'latest'): Promise<string> {
-    let resultMarkdown = "";
+export async function crawlComponentDocs(
+    indexUrl: string,
+    version: string = 'latest',
+    maxPages: number = 200,
+): Promise<string[]> {
+    const browser: Browser = await chromium.launch({ headless: true });
+    const crawledUrls: string[] = [];
+    const visited = new Set<string>();
 
-    const crawler = new PlaywrightCrawler({
-        // Only process this one request
-        maxRequestsPerCrawl: 1,
-        headless: true,
+    try {
+        const page = await browser.newPage();
 
-        async requestHandler({ request, page, log }) {
-            log.info(`Extracting single page ${request.url}...`);
-            await page.waitForLoadState('networkidle');
+        // ── Phase 1: Discover component URLs from the index page ─────────────
+        await page.goto(indexUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => { });
 
-            const html = await page.content();
-            resultMarkdown = extractMarkdownPristine(html, page.url());
+        const visitedUrl = page.url();
+        process.stderr.write(`[Phase 1] Visited index page: ${visitedUrl}\n`);
 
-            const domain = new URL(request.url).hostname;
-            upsertDocument(request.url, version, domain, await page.title(), resultMarkdown);
-        },
-    });
+        const links: string[] = await page.$$eval('a[href]', (anchors) =>
+            anchors
+                .map((a) => (a as HTMLAnchorElement).href)
+                .filter((h) => h && !h.startsWith('javascript'))
+        );
 
-    await crawler.run([url]);
-    return resultMarkdown;
+        process.stderr.write(`[Phase 1] Found ${links.length} total links on index page\n`);
+
+        const indexBase = new URL(indexUrl);
+        const indexBasePath = indexBase.pathname.replace(/\/$/, ''); // e.g. /salt/components
+
+        // Discover component base URLs (strip /index suffix, deduplicate)
+        const componentUrls = [...new Set(links.flatMap((href) => {
+            try {
+                const u = new URL(href);
+                if (u.hostname !== indexBase.hostname) return [];
+                let p = u.pathname.replace(/\/$/, '');
+                // Strip trailing /index (e.g. /salt/components/button/index → /salt/components/button)
+                if (p.endsWith('/index')) p = p.slice(0, -6);
+                if (!p.startsWith(indexBasePath + '/')) return [];
+                const remainder = p.slice(indexBasePath.length + 1); // e.g. 'button' or 'layouts/flex-layout'
+                const segments = remainder.split('/').filter(Boolean);
+                // Accept 1 or 2 path segments (e.g. button, layouts/flex-layout)
+                if (segments.length === 0 || segments.length > 2) return [];
+                return [`${u.origin}${p}`];
+            } catch {
+                return [];
+            }
+        }))];
+
+        process.stderr.write(`[Phase 1] Filtered to ${componentUrls.length} component URLs\n`);
+
+        // Build the full crawl queue: component base + all sub-tabs
+        const queue: string[] = [];
+        for (const componentUrl of componentUrls) {
+            if (!visited.has(componentUrl)) {
+                queue.push(componentUrl);
+                visited.add(componentUrl);
+            }
+            for (const tabUrl of expandSubTabUrls(componentUrl)) {
+                if (!visited.has(tabUrl)) {
+                    queue.push(tabUrl);
+                    visited.add(tabUrl);
+                }
+            }
+        }
+
+        process.stderr.write(`[Phase 2] Crawl queue size: ${queue.length} URLs\n`);
+
+        // ── Phase 2: Crawl all enqueued pages ────────────────────────────────
+        let count = 0;
+        for (const url of queue) {
+            if (count >= maxPages) break;
+            const markdown = await visitPage(page, url, version);
+            if (markdown) {
+                crawledUrls.push(url);
+                count++;
+            }
+        }
+
+        await page.close();
+    } finally {
+        await browser.close();
+    }
+
+    return crawledUrls;
 }
 
 /**
- * Searches the persistent SQLite database (`~/.universal-docs-mcp/documents.db`) for a specific query string.
- * This runs an instantaneous `LIKE` search across all previously crawled domains.
- * 
- * @param query The text string to search for across all cached markdown documents.
- * @returns A Promise resolving to an array of objects containing the matched URL, title, and full document content.
+ * Extracts and caches a single page without following any links.
+ * Returns the extracted Markdown string.
  */
-export async function searchLocalDatasets(query: string, version?: string): Promise<Array<{ url: string, version: string, title: string, content: string }>> {
-    // 15ms instantaneous sqlite LIKE query
-    const results = searchDocuments(query, version);
+export async function extractSinglePage(url: string, version: string = 'latest'): Promise<string> {
+    const browser: Browser = await chromium.launch({ headless: true });
+    try {
+        const page = await browser.newPage();
+        const markdown = await visitPage(page, url, version) ?? '';
+        await page.close();
+        return markdown;
+    } finally {
+        await browser.close();
+    }
+}
 
-    // Map the db response to the legacy Tool return shape
+/**
+ * Searches the persistent SQLite database for a query string.
+ * Returns matched documents with url, version, title and content.
+ */
+export async function searchLocalDatasets(
+    query: string,
+    version?: string,
+): Promise<Array<{ url: string; version: string; title: string; content: string }>> {
+    const results = searchDocuments(query, version);
     return results.map(row => ({
         url: row.url,
         version: row.version,
         title: row.title,
-        content: row.markdown
+        content: row.markdown,
     }));
 }
