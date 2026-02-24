@@ -1,18 +1,24 @@
 {
-  "name": "http-universal-docs-mcp",
-  "version": "1.1.6",
-  "description": "Universal Documentation Crawler MCP Server",
+  "name": "webscribe-mcp",
+  "version": "2.0.0",
+  "description": "WebScribe — The web's scribe. Crawls, chunks and semantically indexes any HTTP documentation for AI copilot agents.",
   "author": "Rohit",
   "license": "MIT",
   "keywords": [
     "mcp",
     "model-context-protocol",
+    "webscribe",
     "crawler",
     "documentation",
     "llm",
     "agent",
+    "copilot",
     "ai",
-    "playwright"
+    "playwright",
+    "fts5",
+    "semantic-chunking",
+    "robots-txt",
+    "sitemap"
   ],
   "main": "build/index.js",
   "type": "module",
@@ -20,20 +26,34 @@
     "build"
   ],
   "bin": {
-    "universal-docs-mcp": "build/index.js"
+    "webscribe-mcp": "build/index.js"
   },
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "tsx tests/chunker.test.ts && tsx tests/robots.test.ts && tsx tests/sitemap.test.ts && tsx tests/db.test.ts",
+    "test:integration": "tsx tests/integration.test.ts",
+    "smoke:extraction": "tsx tests/smoke-extraction.ts",
+    "smoke:crawler": "tsx tests/smoke-crawler.ts",
+    "smoke:card": "tsx tests/smoke-card.ts",
+    "smoke:mcp-client": "npm run build && tsx tests/smoke-mcp-client.ts",
+    "smoke:mcp-crawl": "npm run build && tsx tests/smoke-mcp-crawl.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "better-sqlite3": "^12.6.2",
     "jsdom": "^22.1.0",
+    "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-to-markdown": "^2.1.2",
+    "p-limit": "^7.3.0",
     "playwright": "^1.58.2",
+    "remark-parse": "^11.0.0",
+    "robots-parser": "^3.0.1",
     "turndown": "^7.2.2",
-    "turndown-plugin-gfm": "^1.0.2"
+    "turndown-plugin-gfm": "^1.0.2",
+    "unified": "^11.0.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
