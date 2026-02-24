@@ -1,9 +1,12 @@
 {
   "name": "webscribe-mcp",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "WebScribe — The web's scribe. Crawls, chunks and semantically indexes any HTTP documentation for AI copilot agents.",
   "author": "Rohit",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "keywords": [
     "mcp",
     "model-context-protocol",
