@@ -1,1 +1,66 @@
-Act as a Senior Frontend Engineer. Build a [Component Name] using Next.js 15 App Router, TypeScript, Tailwind CSS, and shadcn/ui. Use Lucide React for icons and Framer Motion for subtle entry animations. Ensure the code is modular, accessible, and uses HSL CSS variables for theming. Break the UI into reusable sub-components.
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" width="480" height="160">
+  <!-- Clean white background -->
+  <rect width="480" height="160" fill="#ffffff"/>
+
+  <!-- ==================== ICON ==================== -->
+  <g transform="translate(40, 44)">
+    <!-- Simple rounded speech bubble -->
+    <path d="M 10 0 
+             L 86 0 
+             Q 96 0 96 10 
+             L 96 58 
+             Q 96 68 86 68 
+             L 34 68 
+             L 22 80 
+             L 26 68 
+             L 10 68 
+             Q 0 68 0 58 
+             L 0 10 
+             Q 0 0 10 0 Z" 
+          fill="none" 
+          stroke="#0a0e1a" 
+          stroke-width="2.5"
+          stroke-linejoin="round"/>
+
+    <!-- REST: { } -->
+    <text x="26" y="46" 
+          font-family="'SF Mono', 'Menlo', monospace" 
+          font-size="26" 
+          fill="#85EA2D" 
+          text-anchor="middle" 
+          font-weight="700">{ }</text>
+
+    <!-- GraphQL triangle -->
+    <g transform="translate(70, 34)">
+      <polygon points="0,-13 11,6 -11,6" 
+               fill="none" 
+               stroke="#E10098" 
+               stroke-width="2.2"
+               stroke-linejoin="round"/>
+      <circle cx="0" cy="-13" r="2.5" fill="#E10098"/>
+      <circle cx="11" cy="6" r="2.5" fill="#E10098"/>
+      <circle cx="-11" cy="6" r="2.5" fill="#E10098"/>
+    </g>
+  </g>
+
+  <!-- ==================== WORDMARK ==================== -->
+  <text x="170" y="92" 
+        font-family="Georgia, serif" 
+        font-size="48" 
+        fill="#0a0e1a" 
+        font-weight="400">ask</text>
+  
+  <text x="248" y="92" 
+        font-family="'SF Mono', 'Menlo', monospace" 
+        font-size="46" 
+        fill="#0a0e1a" 
+        font-weight="700"
+        letter-spacing="-1">API</text>
+
+  <!-- Simple tagline -->
+  <text x="170" y="116" 
+        font-family="'SF Mono', 'Menlo', monospace" 
+        font-size="11" 
+        fill="#6b7280" 
+        letter-spacing="0.5">natural language for REST &amp; GraphQL</text>
+</svg>
