@@ -1,0 +1,120 @@
+Got it — so the stack is: React UI → Claude Code (running locally via your Orbital wrapper or similar) → response streams back. No backend in the middle. That actually simplifies the brief significantly because the "server orchestration" phase collapses into the Claude Code session itself.
+Here's the mental shift: Claude Code is your backend. It already has tool execution, file access, MCP, the agent loop. Your React UI just needs to (a) send prompts in, (b) parse the streamed response, (c) render UI tool blocks as components. The "data tools" you'd normally write server-side are already there — Claude Code can read files, query databases via MCP, run scripts. You only need to add UI tools, and those don't actually execute anything — they're just structured output the model emits that your React app interprets.
+The architecture, revised for your stack
+┌──────────────┐    stdin/socket     ┌─────────────────┐
+│  React UI    │ ──────────────────▶ │  Claude Code    │
+│  (Orbital)   │ ◀── stream ──────── │  (local agent)  │
+│              │                     │  + MCP servers  │
+│  Renderer +  │                     │  + file tools   │
+│  Registry    │                     └─────────────────┘
+└──────────────┘
+The trick is: UI tools aren't real tools that Claude Code executes. They're a convention — you tell Claude in the system prompt "when you want to show a chart, output a fenced code block tagged ui:chart with this JSON shape." Your React app parses those blocks out of the stream and renders components. No tool registration needed on the Claude Code side.
+This is cleaner than it sounds. Two patterns work:
+Pattern A — Fenced JSON blocks (simplest)
+Claude emits markdown like:
+Here's the failure trend:
+
+```````ui:chart
+{ "type": "line", "data": [...], "x": "date", "y": "failures" }
+```````
+
+And the top offenders:
+
+```````ui:table
+{ "columns": [...], "rows": [...] }
+```````
+Your React renderer splits the stream on fenced blocks, parses ui:* ones as components, renders the rest as markdown. Works with any model, any transport.
+Pattern B — Custom XML tags
+Same idea, different syntax: <ui-chart>...</ui-chart>. Slightly easier to stream-parse (you can render partial blocks before the closing tag arrives). Claude is good at honoring XML structure.
+I'd go with Pattern A — Claude Code already streams markdown, and fenced code blocks are something the model is trained to emit reliably.
+The Copilot brief, rewritten for your actual stack
+markdown# Generative UI Layer for Orbital — Build Brief
+
+## Stack reality
+- React + Vite frontend (Orbital, single-file npm package)
+- Talks directly to Claude Code via Express/Socket.io bridge
+- NO backend service, NO Spring Boot, NO Next.js
+- Claude Code is the agent — it already has file/MCP/bash tools
+- We are NOT registering new tools with Claude Code. We are adding a
+  RENDERING CONVENTION the model follows in its text output.
+
+## Goal
+When Claude Code's response contains specially-tagged JSON blocks,
+render them as React components instead of raw text. Everything else
+renders as markdown.
+
+## Phase 1 — Primitive components (/src/generative/primitives/)
+Pure presentational, no data fetching, strict prop types:
+
+  KpiCard, DataTable (TanStack), Chart (Recharts), Timeline,
+  Grid (layout), Markdown (fallback)
+
+Each accepts the JSON payload from a ui:* block as its props.
+
+## Phase 2 — The convention (system prompt addendum)
+Add to the system prompt sent to Claude Code on session start:
+
+  "When presenting structured data, emit a fenced code block with
+   one of these language tags instead of raw markdown tables:
+
+```````ui:kpi      → { label, value, delta?, trend? }
+``````ui:table    → { columns: [{key,label,type?}], rows: [...] }
+`````ui:chart    → { type, data, x, y, series? }
+````ui:timeline → { events: [{ts,label,status?}] }
+```ui:grid     → { columns: 1|2|3, blocks: [<nested ui blocks>] }
+
+   Use them whenever the data is tabular, numeric, time-series, or
+   comparative. Use regular markdown for prose, code, and explanation."
+
+This addendum lives in /src/generative/system-prompt.ts and is
+injected by the Orbital socket bridge on every new session.
+
+## Phase 3 — Stream parser (/src/generative/parser.ts)
+As Claude Code streams markdown chunks back over the socket:
+  - buffer chunks
+  - detect ```ui:<kind>\n...\n``` regions
+  - emit a sequence of {type:'markdown', content} | {type:'ui', kind, payload}
+    blocks to the renderer
+  - handle partial blocks (closing fence not yet arrived) by holding
+    the buffer until complete, then emitting
+
+Streaming requirement: markdown blocks render as they arrive; ui
+blocks render only once the closing ``` is seen and JSON parses.
+
+## Phase 4 — Renderer (/src/generative/Renderer.tsx)
+Single component, takes the parsed block array, maps each block to a
+component. Unknown ui:kind values render <UnknownBlock payload={...} />
+showing the raw JSON in a collapsible panel — never throw.
+
+## Acceptance tests
+- "show batch failure rate last 7 days" → response contains exactly
+  one ```ui:chart block, renders Chart component, no raw JSON visible.
+- "summarize yesterday's runs" → response contains ```ui:grid wrapping
+  KpiCards + a DataTable.
+- Malformed JSON inside a ui:* block → UnknownBlock renders, app does
+  not crash, error visible to user.
+- Plain conversational reply ("hi") → renders as markdown, no UI blocks.
+- Streaming: markdown text appears progressively; ui blocks appear
+  atomically once their closing fence arrives.
+
+## Anti-goals (reject any code that does these)
+- Trying to register tools with Claude Code via MCP for rendering
+  (we don't need to — text convention is sufficient)
+- Hardcoding a "BatchFailureDashboard" or any one-off report component
+- Letting the model emit raw HTML or JSX strings
+- Using dangerouslySetInnerHTML
+- Fetching any data inside a primitive component
+- Eval'ing any part of the model output
+```
+
+A few things worth flagging to Copilot specifically, because they're easy to get wrong:
+
+**The system prompt addendum is the entire spec.** If the model doesn't reliably emit `ui:chart` blocks, no amount of frontend work helps. Spend time on the wording — give 2-3 examples in the prompt itself. "Here's good output: [example]. Here's bad output: [example]." Claude follows examples better than rules.
+
+**Stream parsing is the actual hard part.** Naive regex-on-every-chunk breaks because chunks split mid-fence. Buffer until you see a complete `\n```\n`, then emit. Markdown chunks between fences flush immediately. There's a known pattern for this — ask Copilot to use a state machine (`OUTSIDE_FENCE` / `INSIDE_FENCE` / `READING_LANG_TAG`) rather than regex.
+
+**Keep the registry tiny at first.** Six primitives is already the upper end. The temptation will be to add `ui:diff`, `ui:logs`, `ui:filetree` immediately. Resist — add them only when a real prompt fails without them. Each new primitive is a new contract Claude has to remember.
+
+One bonus this approach gives you that the tool-call version doesn't: **it works with any model and any transport**. If you ever swap Claude Code for a raw API call, or add a Gemini fallback, the rendering layer doesn't change. The convention is just text.
+
+Want me to write the actual `parser.ts` state machine and a sample `system-prompt.ts` so Copilot has a concrete reference? That's the load-bearing 100 lines of the whole system.
