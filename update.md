@@ -1,0 +1,3 @@
+Service name. Pick one. I'd suggest "Code Index Service" or "CodeMap" — your call. Update title, headings, package name (code_index not graphify_index), the architecture diagram label, and the README intro.
+Phase 1 and Phase 2 wording. Replace every "run Graphify, capture JSON" with the actual operation: "walk the tree-sitter AST using a per-language extractor, emit structured records." The schema you defined (symbols, edges) doesn't change — only the implementation language for the extraction step.
+Phase 0 decisions list. Remove "Graphify version pin" (item 3). Replace with: "Tree-sitter grammar versions — pin per language in the lockfile, document the upgrade procedure."
