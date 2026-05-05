@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skills Registry</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #F2F2F7;
+    --surface:   #FFFFFF;
+    --surface2:  #F2F2F7;
+    --surface3:  #E5E5EA;
+    --border:    rgba(0,0,0,0.08);
+    --border2:   rgba(0,0,0,0.13);
+    --text:      #1D1D1F;
+    --text2:     #6E6E73;
+    --text3:     #AEAEB2;
+    --accent:    #0071E3;
+    --accent-bg: #EBF3FD;
+    --green:     #1C8B3C;
+    --green-bg:  #E9F7ED;
+    --amber:     #B25000;
+    --amber-bg:  #FFF3E0;
+    --red:       #C0302C;
+    --red-bg:    #FEF0EF;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+    --r:         10px;
+    --r2:        14px;
+    --r3:        20px;
+    --mono:      "SF Mono", "Menlo", "Monaco", "Cascadia Mono", monospace;
+    --sans:      -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --display:   -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── NAV ── */
+  nav {
+    height: 52px;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .nav-logo {
+    font-family: var(--display);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.3px;
+    margin-right: 36px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav-logo-mark {
+    width: 22px; height: 22px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-logo-mark svg { width: 12px; height: 12px; fill: #fff; }
+  .nav-tabs { display: flex; gap: 2px; flex: 1; }
+  .nav-tab {
+    padding: 0 14px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s;
+    letter-spacing: -0.1px;
+    user-select: none;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+  .nav-badge {
+    background: var(--amber-bg);
+    color: var(--amber);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 20px;
+    font-family: var(--mono);
+  }
+  .avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #a8c8f0 0%, #0071E3 100%);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--display);
+    letter-spacing: 0.3px;
+  }
+
+  /* ── VIEWS ── */
+  .view { display: none; }
+  .view.active { display: flex; }
+
+  /* ── BROWSE ── */
+  #view-browse { height: calc(100vh - 52px); }
+
+  .sidebar {
+    width: 230px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding: 18px 14px;
+    overflow-y: auto;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .sidebar-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    padding-left: 10px;
+  }
+  .sidebar-search {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 7px 12px 7px 32px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--sans);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23AEAEB2' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 10px center;
+  }
+  .sidebar-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,0.12); }
+  .sidebar-search::placeholder { color: var(--text3); }
+
+  .filter-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-radius: var(--r);
+    cursor: pointer;
+    color: var(--text2);
+    font-size: 13px;
+    transition: all 0.12s;
+    user-select: none;
+  }
+  .filter-item:hover { background: var(--bg); color: var(--text); }
+  .filter-item.active { background: var(--accent-bg); color: var(--accent); font-weight: 500; }
+  .filter-item .count { font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; }
+  .filter-item.active .count { color: rgba(0,113,227,0.6); }
+
+  .browse-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 22px 24px;
+    background: var(--bg);
+  }
+  .browse-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .browse-title {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    color: var(--text);
+  }
+  .stat-pills { display: flex; gap: 8px; }
+  .stat-pill {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--text2);
+    box-shadow: var(--shadow-sm);
+  }
+  .stat-pill strong { color: var(--text); font-weight: 600; }
+
+  .skills-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(296px, 1fr));
+    gap: 12px;
+  }
+  .skill-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    cursor: pointer;
+    transition: box-shadow 0.2s, transform 0.15s;
+    box-shadow: var(--shadow-sm);
+  }
+  .skill-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+  .skill-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .skill-name {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.2px;
+  }
+  .skill-desc {
+    font-size: 12.5px;
+    color: var(--text2);
+    line-height: 1.65;
+    flex: 1;
+  }
+  .skill-trigger {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 11.5px;
+    color: var(--text2);
+    line-height: 1.5;
+    border: 1px solid var(--border);
+  }
+  .skill-trigger em { font-style: normal; color: var(--text3); font-size: 10.5px; font-family: var(--mono); }
+  .skill-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    margin-top: 2px;
+  }
+  .tag-row { display: flex; gap: 5px; flex-wrap: wrap; }
+  .tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--text2);
+    background: var(--bg);
+  }
+  .tag-cat { color: var(--accent); background: var(--accent-bg); border-color: rgba(0,113,227,0.2); }
+
+  .badge {
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 20px;
+    flex-shrink: 0;
+    letter-spacing: 0.01em;
+  }
+  .badge-approved { background: var(--green-bg); color: var(--green); }
+  .badge-pending  { background: var(--amber-bg);  color: var(--amber); }
+  .badge-draft    { background: var(--surface3); color: var(--text3); }
+
+  .btn {
+    padding: 6px 14px;
+    border-radius: var(--r);
+    font-size: 12.5px;
+    font-family: var(--sans);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: none;
+    letter-spacing: -0.1px;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #0060C7; }
+  .btn-ghost { background: var(--surface3); color: var(--text); }
+  .btn-ghost:hover { background: #D8D8DC; }
+  .btn-ghost-outline { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
+  .btn-ghost-outline:hover { background: var(--bg); color: var(--text); }
+  .btn-green { background: var(--green-bg); color: var(--green); }
+  .btn-green:hover { background: #d4f0dc; }
+  .btn-red { background: var(--red-bg); color: var(--red); }
+  .btn-red:hover { background: #fcd9d8; }
+  .btn-amber { background: var(--amber-bg); color: var(--amber); }
+  .btn-amber:hover { background: #ffe4b0; }
+  .btn-install { background: var(--accent); color: #fff; font-size: 11.5px; padding: 5px 12px; border-radius: 8px; }
+  .btn-install:hover { background: #0060C7; }
+
+  /* ── SUBMIT ── */
+  #view-submit { height: calc(100vh - 52px); overflow-y: auto; background: var(--bg); }
+  .submit-inner { max-width: 860px; width: 100%; margin: 0 auto; padding: 28px 32px; display: flex; flex-direction: column; gap: 18px; }
+  .page-title { font-family: var(--display); font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); margin-bottom: 2px; }
+  .page-sub { font-size: 13px; color: var(--text2); }
+
+  .section-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    padding: 20px 22px;
+    box-shadow: var(--shadow-sm);
+  }
+  .section-title {
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--display);
+    color: var(--text);
+    letter-spacing: -0.2px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-label { font-size: 12px; font-weight: 500; color: var(--text); letter-spacing: -0.1px; }
+  .form-hint { font-size: 11px; color: var(--text3); }
+  .form-input, .form-select, .form-textarea {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--sans);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    width: 100%;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,113,227,0.12);
+    background: var(--surface);
+  }
+  .form-textarea { resize: vertical; line-height: 1.65; }
+  .form-code {
+    background: #F8F8FA;
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    padding: 12px 14px;
+    color: var(--text);
+    font-size: 12px;
+    font-family: var(--mono);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    width: 100%;
+    resize: vertical;
+    line-height: 1.75;
+  }
+  .form-code:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,0.12); }
+
+  .checklist { display: flex; flex-direction: column; gap: 8px; }
+  .check-item { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text2); }
+  .check-circle {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border2);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 10px;
+    transition: all 0.2s;
+  }
+  .check-circle.ok { background: var(--green); border-color: var(--green); color: #fff; }
+  .check-circle.no { color: transparent; }
+
+  .preview-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .preview-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+
+  .submit-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 0 4px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── REVIEW ── */
+  #view-review { height: calc(100vh - 52px); flex-direction: column; background: var(--bg); }
+  .review-top {
+    background: var(--surface);
+    padding: 20px 26px 0;
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
+  .review-top-row { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 14px; }
+  .review-tab-bar { display: flex; gap: 0; }
+  .review-tab {
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.12s;
+    letter-spacing: -0.1px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .review-tab:hover { color: var(--text); }
+  .review-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+
+  .review-body { display: flex; flex: 1; overflow: hidden; }
+  .review-list {
+    width: 320px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    background: var(--surface);
+  }
+  .review-item {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .review-item:hover { background: var(--bg); }
+  .review-item.active { background: var(--accent-bg); border-left: 3px solid var(--accent); padding-left: 15px; }
+  .review-item-name { font-family: var(--mono); font-size: 12.5px; font-weight: 500; color: var(--text); margin-bottom: 3px; letter-spacing: -0.2px; }
+  .review-item-sub { font-size: 12px; color: var(--text2); line-height: 1.5; }
+  .review-item-meta { font-size: 11px; color: var(--text3); margin-top: 7px; display: flex; gap: 10px; }
+
+  .review-panel {
+    flex: 1;
+    padding: 22px 26px;
+    overflow-y: auto;
+    background: var(--bg);
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .review-panel-title { font-family: var(--mono); font-size: 17px; font-weight: 600; letter-spacing: -0.3px; margin-bottom: 3px; }
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .meta-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 10px 14px;
+    box-shadow: var(--shadow-sm);
+  }
+  .meta-key { font-size: 10.5px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+  .meta-val { font-size: 13px; color: var(--text); font-weight: 500; }
+
+  .code-block {
+    background: #F8F8FA;
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    padding: 16px 18px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.75;
+    overflow-x: auto;
+    white-space: pre;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .info-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    padding: 14px 16px;
+    font-size: 12.5px;
+    color: var(--text2);
+    line-height: 1.65;
+    box-shadow: var(--shadow-sm);
+  }
+  .info-box-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+
+  .comment-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    padding: 14px 16px;
+    box-shadow: var(--shadow-sm);
+  }
+  .comment-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--sans);
+    resize: none;
+    line-height: 1.65;
+  }
+  .comment-input::placeholder { color: var(--text3); }
+  .comment-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+  }
+
+  .section-label { font-size: 12px; font-weight: 600; color: var(--text2); letter-spacing: -0.1px; margin-bottom: 8px; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 28px; right: 28px;
+    background: rgba(29,29,31,0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--r2);
+    padding: 11px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    z-index: 999;
+    display: none;
+    gap: 9px;
+    align-items: center;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+    letter-spacing: -0.1px;
+  }
+  .toast.show { display: flex; }
+  .toast-dot { width: 6px; height: 6px; border-radius: 50%; background: #34C759; flex-shrink: 0; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <div class="nav-logo-mark">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    </div>
+    Skills Registry
+  </div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" onclick="showView('browse')">Browse</div>
+    <div class="nav-tab" onclick="showView('submit')">Submit skill</div>
+    <div class="nav-tab" onclick="showView('review')">Review queue <span class="nav-badge">3</span></div>
+    <div class="nav-tab">My skills</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="avatar">MA</div>
+  </div>
+</nav>
+
+<!-- ─────────── BROWSE ─────────── -->
+<div class="view active" id="view-browse">
+  <div class="sidebar">
+    <div>
+      <input class="sidebar-search" type="text" placeholder="Search skills…" oninput="filterSkills(this.value)">
+    </div>
+    <div>
+      <div class="sidebar-section-label">Category</div>
+      <div class="filter-item active" onclick="setCategory(this,'all')">All <span class="count">12</span></div>
+      <div class="filter-item" onclick="setCategory(this,'testing')">Testing <span class="count">3</span></div>
+      <div class="filter-item" onclick="setCategory(this,'frontend')">Frontend <span class="count">2</span></div>
+      <div class="filter-item" onclick="setCategory(this,'migration')">Migration <span class="count">2</span></div>
+      <div class="filter-item" onclick="setCategory(this,'data')">Data / Databricks <span class="count">2</span></div>
+      <div class="filter-item" onclick="setCategory(this,'devops')">DevOps <span class="count">2</span></div>
+      <div class="filter-item" onclick="setCategory(this,'docs')">Documentation <span class="count">1</span></div>
+    </div>
+    <div>
+      <div class="sidebar-section-label">Status</div>
+      <div class="filter-item active" onclick="setStatus(this,'approved')">Approved <span class="count">9</span></div>
+      <div class="filter-item" onclick="setStatus(this,'pending')">Pending review <span class="count">3</span></div>
+    </div>
+    <div>
+      <div class="sidebar-section-label">Sort by</div>
+      <select class="form-select" style="font-size:12.5px">
+        <option>Recently added</option>
+        <option>Most installed</option>
+        <option>Name A–Z</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="browse-main">
+    <div class="browse-header">
+      <div class="browse-title">Skills</div>
+      <div class="stat-pills">
+        <div class="stat-pill"><strong>12</strong> total</div>
+        <div class="stat-pill"><strong>9</strong> approved</div>
+        <div class="stat-pill"><strong>3</strong> pending</div>
+      </div>
+    </div>
+    <div class="skills-grid" id="skills-grid"></div>
+  </div>
+</div>
+
+<!-- ─────────── SUBMIT ─────────── -->
+<div class="view" id="view-submit" style="flex-direction:column;">
+  <div id="view-submit" style="height:calc(100vh - 52px);overflow-y:auto;background:var(--bg)">
+  <div class="submit-inner">
+    <div>
+      <div class="page-title">Submit a skill</div>
+      <div class="page-sub">Submitted skills go into the review queue. Once approved by a maintainer they become available to the whole organisation.</div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-title">Basic information</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Skill name <span style="color:var(--red)">*</span></label>
+          <input class="form-input" type="text" placeholder="e.g. playwright-healer" id="f-name" oninput="updatePreview()">
+          <span class="form-hint">Lowercase, hyphenated. No spaces.</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category <span style="color:var(--red)">*</span></label>
+          <select class="form-select" id="f-cat" onchange="updatePreview()">
+            <option value="">Select…</option>
+            <option>Testing</option>
+            <option>Frontend</option>
+            <option>Migration</option>
+            <option>Data / Databricks</option>
+            <option>DevOps</option>
+            <option>Documentation</option>
+            <option>Security</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Description <span style="color:var(--red)">*</span></label>
+          <textarea class="form-textarea" rows="2" placeholder="One or two sentences — what does this skill do and when should Claude use it?" id="f-desc" oninput="updatePreview()"></textarea>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Trigger conditions</label>
+          <textarea class="form-textarea" rows="2" placeholder="When should this skill activate? e.g. 'when user asks to fix failing Playwright tests'" id="f-trigger" oninput="updatePreview()"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-title">SKILL.md content <span style="color:var(--red)">*</span></div>
+      <textarea class="form-code" rows="13" id="f-skillmd" oninput="updatePreview()" placeholder="---
+name: your-skill-name
+description: Activate when...
+---
+
+## What this skill does
+...
+
+## When to use
+...
+
+## Steps
+..."></textarea>
+      <div style="margin-top:8px;font-size:12px;color:var(--text3)">This is the exact content injected into CLAUDE.md on install.</div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-title">Additional details</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Your name / team</label>
+          <input class="form-input" type="text" placeholder="e.g. QA Automation team">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Version</label>
+          <input class="form-input" type="text" placeholder="1.0.0">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Notes for reviewer</label>
+          <textarea class="form-textarea" rows="2" placeholder="Dependencies, caveats, or related skills to check for conflicts…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="section-card">
+        <div class="section-title">Checklist</div>
+        <div class="checklist">
+          <div class="check-item"><div class="check-circle no" id="ck-name"></div> Skill name provided</div>
+          <div class="check-item"><div class="check-circle no" id="ck-cat"></div> Category selected</div>
+          <div class="check-item"><div class="check-circle no" id="ck-desc"></div> Description written</div>
+          <div class="check-item"><div class="check-circle no" id="ck-md"></div> SKILL.md content added</div>
+          <div class="check-item"><div class="check-circle no" id="ck-trigger"></div> Trigger conditions defined</div>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="preview-label">Card preview</div>
+        <div class="preview-card">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+            <span id="pv-name" style="font-family:var(--mono);font-size:12.5px;font-weight:500;color:var(--text3)">skill-name</span>
+            <span class="badge badge-pending">pending</span>
+          </div>
+          <div id="pv-desc" style="font-size:12.5px;color:var(--text3);line-height:1.6">Description will appear here</div>
+          <div id="pv-trigger" style="font-size:11.5px;color:var(--text2);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 9px">Trigger: not set</div>
+          <div style="display:flex;gap:5px">
+            <span class="tag tag-cat" id="pv-cat">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="submit-footer">
+      <span style="font-size:12.5px;color:var(--text3)">Skill won't be published until a maintainer approves it</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost">Save draft</button>
+        <button class="btn btn-primary" onclick="submitSkill()">Submit for review</button>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- ─────────── REVIEW ─────────── -->
+<div class="view" id="view-review">
+  <div class="review-top">
+    <div class="review-top-row">
+      <div>
+        <div class="page-title" style="font-size:18px">Review queue</div>
+        <div class="page-sub" style="margin-top:2px">Review SKILL.md content, check for conflicts, then approve or request changes.</div>
+      </div>
+    </div>
+    <div class="review-tab-bar">
+      <div class="review-tab active">Pending <span class="nav-badge">3</span></div>
+      <div class="review-tab">Approved</div>
+      <div class="review-tab">Rejected</div>
+    </div>
+  </div>
+  <div class="review-body">
+    <div class="review-list">
+      <div class="review-item active" onclick="selectReview(this,0)">
+        <div class="review-item-name">playwright-healer</div>
+        <div class="review-item-sub">Auto-fixes failing Playwright tests via error analysis</div>
+        <div class="review-item-meta"><span>Testing</span><span>QA Team</span><span>2h ago</span></div>
+      </div>
+      <div class="review-item" onclick="selectReview(this,1)">
+        <div class="review-item-name">databricks-batch-probe</div>
+        <div class="review-item-sub">Regression runner for Databricks batch pipelines</div>
+        <div class="review-item-meta"><span>Data</span><span>Platform</span><span>1d ago</span></div>
+      </div>
+      <div class="review-item" onclick="selectReview(this,2)">
+        <div class="review-item-name">dotnet-to-springboot</div>
+        <div class="review-item-sub">Migration guidance for .NET → Spring Boot patterns</div>
+        <div class="review-item-meta"><span>Migration</span><span>Architecture</span><span>3d ago</span></div>
+      </div>
+    </div>
+    <div class="review-panel" id="review-panel"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-dot"></div>
+  <span id="toast-text">Done</span>
+</div>
+
+<script>
+const SKILLS = [
+  { name:'playwright-healer', cat:'Testing', desc:'Automatically identifies and fixes failing Playwright tests by analysing error stack traces and applying targeted fixes.', trigger:'when user reports failing Playwright tests or asks to fix a test suite', author:'QA Team', age:'2d', status:'approved' },
+  { name:'copilot-migration-validator', cat:'Migration', desc:'Validates .NET to React/Spring Boot migration coverage, checking business logic parity and RBAC rule consistency.', trigger:'when validating migrated code or comparing .NET and React/Java implementations', author:'Architecture', age:'5d', status:'approved' },
+  { name:'databricks-batch-probe', cat:'Data / Databricks', desc:'Runs regression checks against Databricks batch pipelines across S3, Airflow, and Delta tables.', trigger:'when user needs to verify batch pipeline results or run regression tests on data jobs', author:'Platform', age:'1w', status:'approved' },
+  { name:'storybook-extractor', cat:'Frontend', desc:'Extracts component metadata from Storybook stories.json for use as Copilot context during migration.', trigger:'when working with Storybook components or needing UI component context for migration', author:'Frontend Guild', age:'1w', status:'approved' },
+  { name:'confluence-dc-auth', cat:'DevOps', desc:'Handles OAuth 2.0 Application Links for Confluence Data Center SSO-compatible API authentication.', trigger:'when integrating with Confluence Data Center APIs or setting up SSO Application Links', author:'Infra', age:'2w', status:'approved' },
+  { name:'ast-code-graph', cat:'Migration', desc:'Builds AST-based code graphs using Tree-sitter for cross-file dependency analysis.', trigger:'when user needs to analyse code structure, map dependencies, or build a codebase graph', author:'Dev Tools', age:'3w', status:'approved' },
+  { name:'qa-agent-orchestrator', cat:'Testing', desc:'Coordinates Healer, Generator, Analyst, and Reviewer agents for autonomous Playwright test maintenance.', trigger:'when running autonomous QA maintenance or coordinating multi-agent test workflows', author:'QA Team', age:'1m', status:'approved' },
+  { name:'spring-boot-patterns', cat:'Migration', desc:'Provides Spring Boot idiomatic patterns when converting .NET service layer code.', trigger:'when converting .NET controllers, services or repositories to Spring Boot', author:'Architecture', age:'1m', status:'approved' },
+  { name:'bitbucket-health', cat:'DevOps', desc:'Checks Bitbucket repository health: stale branches, PR age, and pipeline status.', trigger:'when user asks about repository health, PR backlogs, or branch hygiene', author:'DevOps', age:'1m', status:'approved' },
+  { name:'playwright-healer-v2', cat:'Testing', desc:'Enhanced playwright-healer with component-level test isolation and parallel healing support.', trigger:'when user asks to fix failing Playwright tests', author:'QA Team', age:'2h', status:'pending' },
+  { name:'databricks-batch-probe-v2', cat:'Data / Databricks', desc:'Regression test runner for S3 and Databricks batch data pipelines.', trigger:'when running batch regression tests', author:'Platform', age:'1d', status:'pending' },
+  { name:'dotnet-to-springboot', cat:'Migration', desc:'Migration guidance for common .NET patterns when converting to Spring Boot.', trigger:'when converting .NET code to Spring Boot or Java', author:'Architecture', age:'3d', status:'pending' },
+];
+
+const REVIEW_DATA = [
+  { name:'playwright-healer', cat:'Testing', author:'QA Team', submitted:'2 hours ago',
+    desc:'Auto-fixes failing Playwright tests using error analysis and stack trace parsing.',
+    notes:'Update to existing skill. v2 adds component-level isolation. Please check against existing skill for trigger phrase conflicts.',
+    content:`---\nname: playwright-healer\ndescription: Activate when user reports failing\nPlaywright tests or asks to fix a test suite.\nversion: 2.0.0\n---\n\n## What this skill does\nAnalyses Playwright test failure output, identifies\nroot causes, and applies targeted fixes using the\nHealer agent pattern.\n\n## Trigger conditions\n- User pastes test failure output\n- User asks "fix my tests" or similar\n- CI pipeline failure is mentioned\n\n## Steps\n1. Parse error output for failure pattern\n2. Identify affected selector or assertion\n3. Apply fix using least-invasive strategy\n4. Re-run affected test to verify`
+  },
+  { name:'databricks-batch-probe', cat:'Data / Databricks', author:'Platform Team', submitted:'1 day ago',
+    desc:'Regression test runner for Databricks batch pipelines spanning S3, Databricks, and Airflow.',
+    notes:'New skill. Tested against staging environment. No known conflicts.',
+    content:`---\nname: databricks-batch-probe\ndescription: Activate when running batch pipeline\nregression tests or verifying data job outputs.\nversion: 1.0.0\n---\n\n## What this skill does\nRuns regression checks across batch pipeline\nstages: S3 input, Databricks job execution,\nand Airflow DAG status checks.\n\n## Trigger conditions\n- User asks to verify batch pipeline results\n- User mentions regression testing data jobs\n- BatchProbe tool is referenced\n\n## Steps\n1. Check S3 source data availability\n2. Validate Databricks job run status\n3. Compare output against expected schema\n4. Report discrepancies with row-level diffs`
+  },
+  { name:'dotnet-to-springboot', cat:'Migration', author:'Architecture Team', submitted:'3 days ago',
+    desc:'Migration guidance for .NET → Spring Boot conversion patterns.',
+    notes:'Targets our migration project patterns. Works best alongside ast-code-graph skill.',
+    content:`---\nname: dotnet-to-springboot\ndescription: Activate when converting .NET code\nto Spring Boot or comparing implementations.\nversion: 1.0.0\n---\n\n## What this skill does\nProvides idiomatic Spring Boot patterns for\ncommon .NET constructs in the migration project.\n\n## Trigger conditions\n- User is converting .NET controller/service\n- User asks about equivalent Java patterns\n- Migration validation is being performed\n\n## Steps\n1. Identify .NET pattern type\n2. Map to Spring Boot equivalent\n3. Flag RBAC or auth differences\n4. Suggest test coverage for parity check`
+  }
+];
+
+function renderSkills(list) {
+  document.getElementById('skills-grid').innerHTML = list.map(s => `
+    <div class="skill-card">
+      <div class="skill-card-top">
+        <span class="skill-name">${s.name}</span>
+        <span class="badge ${s.status==='approved'?'badge-approved':'badge-pending'}">${s.status==='approved'?'Approved':'Pending'}</span>
+      </div>
+      <div class="skill-desc">${s.desc}</div>
+      <div class="skill-trigger"><em>trigger</em> ${s.trigger}</div>
+      <div class="skill-footer">
+        <div class="tag-row">
+          <span class="tag tag-cat">${s.cat}</span>
+          <span class="tag">${s.author}</span>
+          <span class="tag">${s.age}</span>
+        </div>
+        ${s.status==='approved'
+          ? `<button class="btn btn-install" onclick="toast('Installing ${s.name}…')">Install</button>`
+          : `<button class="btn" style="background:var(--bg);color:var(--text3);cursor:default;font-size:11.5px;padding:5px 12px;border-radius:8px;border:1px solid var(--border2)" disabled>In review</button>`
+        }
+      </div>
+    </div>
+  `).join('');
+}
+
+let currentCat = 'all', currentSearch = '';
+renderSkills(SKILLS);
+
+function setCategory(el, cat) {
+  document.querySelectorAll('#view-browse .sidebar .filter-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  currentCat = cat;
+  applyFilters();
+}
+function setStatus(el) {
+  el.classList.toggle('active');
+  applyFilters();
+}
+function filterSkills(q) {
+  currentSearch = q.toLowerCase();
+  applyFilters();
+}
+function applyFilters() {
+  let list = SKILLS;
+  if (currentCat !== 'all') list = list.filter(s => s.cat.toLowerCase().includes(currentCat));
+  if (currentSearch) list = list.filter(s => s.name.includes(currentSearch) || s.desc.toLowerCase().includes(currentSearch));
+  renderSkills(list);
+}
+
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  const tabs = document.querySelectorAll('.nav-tab');
+  tabs.forEach(t => t.classList.remove('active'));
+  const map = {browse:0, submit:1, review:2};
+  if (map[name] !== undefined) tabs[map[name]].classList.add('active');
+}
+
+function updatePreview() {
+  const name = document.getElementById('f-name').value || 'skill-name';
+  const desc = document.getElementById('f-desc').value || 'Description will appear here';
+  const trigger = document.getElementById('f-trigger').value || 'not set';
+  const cat = document.getElementById('f-cat').value || '—';
+  const pn = document.getElementById('pv-name');
+  pn.textContent = name;
+  pn.style.color = document.getElementById('f-name').value ? 'var(--text)' : 'var(--text3)';
+  const pd = document.getElementById('pv-desc');
+  pd.textContent = desc;
+  pd.style.color = document.getElementById('f-desc').value ? 'var(--text2)' : 'var(--text3)';
+  document.getElementById('pv-trigger').textContent = 'Trigger: ' + trigger;
+  document.getElementById('pv-cat').textContent = cat;
+  tick('ck-name', !!document.getElementById('f-name').value);
+  tick('ck-cat', !!document.getElementById('f-cat').value);
+  tick('ck-desc', document.getElementById('f-desc').value.length > 10);
+  tick('ck-md', document.getElementById('f-skillmd').value.length > 30);
+  tick('ck-trigger', !!document.getElementById('f-trigger').value);
+}
+
+function tick(id, ok) {
+  const el = document.getElementById(id);
+  el.textContent = ok ? '✓' : '';
+  el.className = 'check-circle ' + (ok ? 'ok' : 'no');
+}
+
+function submitSkill() {
+  const name = document.getElementById('f-name').value;
+  const md = document.getElementById('f-skillmd').value;
+  if (!name || !md) { toast('Fill in required fields first'); return; }
+  toast('"' + name + '" submitted for review');
+  setTimeout(() => showView('review'), 1300);
+}
+
+function selectReview(el, idx) {
+  document.querySelectorAll('.review-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  const d = REVIEW_DATA[idx];
+  document.getElementById('review-panel').innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+      <div>
+        <div class="review-panel-title">${d.name}</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:2px">${d.desc}</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button class="btn btn-red" onclick="reviewAction('Rejected','${d.name}')">Reject</button>
+        <button class="btn btn-amber" onclick="reviewAction('Changes requested','${d.name}')">Request changes</button>
+        <button class="btn btn-green" onclick="reviewAction('Approved','${d.name}')">Approve</button>
+      </div>
+    </div>
+    <div class="meta-grid">
+      <div class="meta-card"><div class="meta-key">Submitted by</div><div class="meta-val">${d.author}</div></div>
+      <div class="meta-card"><div class="meta-key">Submitted</div><div class="meta-val">${d.submitted}</div></div>
+      <div class="meta-card"><div class="meta-key">Category</div><div class="meta-val">${d.cat}</div></div>
+      <div class="meta-card"><div class="meta-key">Version</div><div class="meta-val">1.0.0</div></div>
+    </div>
+    <div>
+      <div class="section-label">SKILL.md content</div>
+      <div class="code-block">${d.content}</div>
+    </div>
+    <div>
+      <div class="section-label">Notes from submitter</div>
+      <div class="info-box">${d.notes}</div>
+    </div>
+    <div class="comment-box">
+      <div class="section-label">Review comment <span style="font-weight:400;color:var(--text3)">(optional)</span></div>
+      <textarea class="comment-input" rows="3" placeholder="Add a comment visible to the submitter…"></textarea>
+      <div class="comment-footer">
+        <span style="font-size:12px;color:var(--text3)">Submitter will be notified</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-red" onclick="reviewAction('Rejected','${d.name}')">Reject</button>
+          <button class="btn btn-amber" onclick="reviewAction('Changes requested','${d.name}')">Request changes</button>
+          <button class="btn btn-green" onclick="reviewAction('Approved &amp; published','${d.name}')">Approve &amp; publish</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function reviewAction(action, name) {
+  toast(action + ': ' + name);
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-text').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+selectReview(document.querySelector('.review-item'), 0);
+</script>
+</body>
+</html>
