@@ -1,0 +1,19 @@
+I want to completely refactor the UI of my current application to match a new minimalist, full-width design system. Please review the provided reference code and apply its design patterns, layout, and Tailwind styling to my existing code.
+
+Here are the key architectural and design changes to apply:
+
+Color Palette: Switch entirely to Tailwind's zinc palette (e.g., bg-zinc-50, border-zinc-200, text-zinc-900). Remove the existing colorful themes.
+
+Layout: Implement the full-width layout with a sticky header, the left sidebar for categories, and a responsive grid for the skill cards.
+
+Navigation/Views: Update the routing to use the currentView state machine pattern ('home', 'submit', 'review', 'docs') as shown in the reference.
+
+Custom Tech Icons: Implement the TechIcon component with the custom SVGs for React, Python, AWS, Databricks, Jira, etc., and integrate them into the cards.
+
+Interactive Drawer: Add the sliding drawer overlay for skill details. It must include the platform toggle (Claude/GitHub) and the 'Overview', 'Skills/Agent', 'Setup', 'Usage', and 'Troubleshooting' tabs.
+
+Forms & Review Queue: Update the "Submit" and "Review" pages to match the 2-column and split-pane layouts from the reference.
+
+CRITICAL INSTRUCTION: > Do NOT remove or alter my existing business logic, actual data fetching, or database mutations. Only map my existing state and data to this new JSX structure and Tailwind CSS styling. Add any missing UI-specific state (like drawerSkill, drawerTab, searchOpen) as needed.
+
+Here is the Reference UI Code to match:
