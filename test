@@ -1,0 +1,399 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  SlidersHorizontal, 
+  Target, 
+  Activity,
+  ChevronLeft,
+  Briefcase,
+  TrendingUp,
+  TrendingDown,
+  ArrowUpRight,
+  X,
+  RotateCcw
+} from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  ReferenceLine
+} from 'recharts';
+
+const PRODUCTS = ['Annuity', 'Equity', 'Debt', 'Lending', 'Mortgage'];
+
+// Base financial data in millions ($M)
+const BASE_DATA = {
+  Annuity: { '1Mo': 45, '3Mo': 120, YTD: 210, RoY_Base: 350, PriorFY: 520 },
+  Equity: { '1Mo': 85, '3Mo': 240, YTD: 480, RoY_Base: 600, PriorFY: 950 },
+  Debt: { '1Mo': 30, '3Mo': 85, YTD: 160, RoY_Base: 290, PriorFY: 420 },
+  Lending: { '1Mo': 65, '3Mo': 190, YTD: 380, RoY_Base: 520, PriorFY: 850 },
+  Mortgage: { '1Mo': 110, '3Mo': 310, YTD: 620, RoY_Base: 780, PriorFY: 1350 },
+};
+
+// Helper for formatting currency
+const fmt = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val) + 'M';
+const fmtPct = (val) => (val > 0 ? '+' : '') + val.toFixed(1) + '%';
+
+export default function App() {
+  const [view, setView] = useState('selection'); // 'selection', 'analysis'
+  const [isTweakModalOpen, setIsTweakModalOpen] = useState(false);
+  
+  // State for adjustments (Goal Seeking) - stored as percentage modifiers
+  const [adjustments, setAdjustments] = useState({
+    Annuity: 0, Equity: 0, Debt: 0, Lending: 0, Mortgage: 0
+  });
+
+  // Derived state calculations
+  const processedData = useMemo(() => {
+    let totals = { '1Mo': 0, '3Mo': 0, YTD: 0, RoY_Base: 0, RoY_Tweaked: 0, ProjFY: 0, PriorFY: 0 };
+    
+    const rows = PRODUCTS.map(prod => {
+      const base = BASE_DATA[prod];
+      const tweakPct = adjustments[prod] / 100;
+      const RoY_Tweaked = base.RoY_Base * (1 + tweakPct);
+      const ProjFY = base.YTD + RoY_Tweaked;
+      
+      totals['1Mo'] += base['1Mo'];
+      totals['3Mo'] += base['3Mo'];
+      totals.YTD += base.YTD;
+      totals.RoY_Base += base.RoY_Base;
+      totals.RoY_Tweaked += RoY_Tweaked;
+      totals.ProjFY += ProjFY;
+      totals.PriorFY += base.PriorFY;
+
+      return { product: prod, ...base, RoY_Tweaked, ProjFY };
+    });
+
+    const baseFYTotal = totals.YTD + totals.RoY_Base;
+    const yoyGrowthBase = ((baseFYTotal - totals.PriorFY) / totals.PriorFY) * 100;
+    const yoyGrowthTweaked = ((totals.ProjFY - totals.PriorFY) / totals.PriorFY) * 100;
+
+    return { rows, totals, baseFYTotal, yoyGrowthBase, yoyGrowthTweaked };
+  }, [adjustments]);
+
+  const handleTweakChange = (product, value) => {
+    setAdjustments(prev => ({ ...prev, [product]: parseFloat(value) }));
+  };
+
+  const resetTweaks = () => {
+    setAdjustments({ Annuity: 0, Equity: 0, Debt: 0, Lending: 0, Mortgage: 0 });
+  };
+
+  const hasTweaks = Object.values(adjustments).some(val => val !== 0);
+
+  if (view === 'selection') {
+    return (
+      <div className="h-screen bg-[#09090b] text-zinc-300 flex items-center justify-center p-6 font-sans">
+        <div className="max-w-3xl w-full">
+          <div className="mb-10 text-center">
+            <h1 className="text-3xl font-semibold text-zinc-100 tracking-tight mb-3">
+              Scorecard Analytics Workspace
+            </h1>
+            <p className="text-zinc-400 text-sm max-w-lg mx-auto">
+              Select a module to view current performance metrics or engage in interactive goal-seeking projections.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            <button 
+              onClick={() => setView('analysis')}
+              className="flex flex-col items-start p-6 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 hover:bg-zinc-800/50 transition-colors text-left"
+            >
+              <div className="text-zinc-100 mb-4">
+                <Activity size={24} strokeWidth={1.5} />
+              </div>
+              <h2 className="text-base font-semibold text-zinc-100 mb-2">Standard Scorecard</h2>
+              <p className="text-zinc-400 text-sm leading-relaxed mb-6 flex-grow">
+                Review YTD performance against Rest-of-Year projections and historical FY actuals.
+              </p>
+              <div className="text-zinc-300 text-sm font-medium flex items-center">
+                Launch Dashboard <ArrowUpRight className="ml-1 w-4 h-4" />
+              </div>
+            </button>
+
+            <button 
+              onClick={() => { setView('analysis'); setIsTweakModalOpen(true); }}
+              className="flex flex-col items-start p-6 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 hover:bg-zinc-800/50 transition-colors text-left"
+            >
+              <div className="text-zinc-100 mb-4">
+                <Target size={24} strokeWidth={1.5} />
+              </div>
+              <h2 className="text-base font-semibold text-zinc-100 mb-2">Goal Seeking</h2>
+              <p className="text-zinc-400 text-sm leading-relaxed mb-6 flex-grow">
+                Adjust expected performance trajectories to visualize portfolio impacts in real-time.
+              </p>
+              <div className="text-zinc-300 text-sm font-medium flex items-center">
+                Launch Modeling <ArrowUpRight className="ml-1 w-4 h-4" />
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen bg-[#09090b] text-zinc-300 font-sans p-4 flex flex-col overflow-hidden">
+      
+      {/* Header */}
+      <header className="flex justify-between items-center mb-4 bg-zinc-900 px-4 py-3 rounded-md border border-zinc-800 shrink-0">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => { setView('selection'); resetTweaks(); setIsTweakModalOpen(false); }}
+            className="text-zinc-400 hover:text-zinc-100 transition-colors"
+            title="Back to menu"
+          >
+            <ChevronLeft size={20} strokeWidth={2} />
+          </button>
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-base font-semibold text-zinc-100 flex items-center gap-2">
+              <Briefcase size={16} className="text-indigo-400" />
+              Product Scorecard
+            </h1>
+            <span className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider">
+              FY26 Projection vs FY25 Actuals
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex gap-2">
+          {hasTweaks && (
+            <button 
+              onClick={resetTweaks}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+            >
+              <RotateCcw size={14} />
+              Reset Scenario
+            </button>
+          )}
+          <button 
+            onClick={() => setIsTweakModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded transition-colors bg-zinc-100 text-zinc-900 border-zinc-200 hover:bg-white"
+          >
+            <SlidersHorizontal size={14} />
+            Adjust Projections
+          </button>
+        </div>
+      </header>
+
+      {/* KPI Row */}
+      <div className="grid grid-cols-3 gap-4 mb-4 shrink-0">
+        <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-md">
+          <div className="text-[11px] text-zinc-400 font-medium tracking-wide uppercase mb-1">Base Projected FY</div>
+          <div className="flex items-baseline justify-between">
+            <div className="text-2xl font-semibold text-zinc-100">{fmt(processedData.baseFYTotal)}</div>
+            <div className={`flex items-center text-xs font-medium ${processedData.yoyGrowthBase >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {processedData.yoyGrowthBase >= 0 ? <TrendingUp size={14} className="mr-1"/> : <TrendingDown size={14} className="mr-1"/>}
+              {fmtPct(processedData.yoyGrowthBase)} YoY
+            </div>
+          </div>
+        </div>
+
+        <div className={`bg-zinc-900 p-4 rounded-md transition-colors ${hasTweaks ? 'border border-indigo-500/50 bg-indigo-950/20' : 'border border-zinc-800'}`}>
+          <div className="flex justify-between items-center mb-1">
+            <div className={`text-[11px] font-medium tracking-wide uppercase ${hasTweaks ? 'text-indigo-400' : 'text-zinc-400'}`}>
+              Modeled FY Scenario
+            </div>
+            {hasTweaks && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>}
+          </div>
+          <div className="flex items-baseline justify-between">
+            <div className="text-2xl font-semibold text-zinc-100">{fmt(processedData.totals.ProjFY)}</div>
+            <div className={`flex items-center text-xs font-medium ${processedData.yoyGrowthTweaked >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {processedData.yoyGrowthTweaked >= 0 ? <TrendingUp size={14} className="mr-1"/> : <TrendingDown size={14} className="mr-1"/>}
+              {fmtPct(processedData.yoyGrowthTweaked)} YoY
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-md">
+          <div className="text-[11px] text-zinc-400 font-medium tracking-wide uppercase mb-1">Scenario vs Base Variance</div>
+          <div className="flex items-baseline justify-between">
+            {(() => {
+              const variance = processedData.totals.ProjFY - processedData.baseFYTotal;
+              const isPos = variance > 0;
+              const isNeg = variance < 0;
+              const isZero = variance === 0;
+              return (
+                <div className={`text-2xl font-semibold ${isZero ? 'text-zinc-500' : isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {isZero ? '0M' : (isPos ? '+' : '') + fmt(variance)}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area (Table + Chart) */}
+      <div className="flex gap-4 flex-grow min-h-0">
+        
+        {/* Left Column: Data Table */}
+        <div className="w-[60%] bg-zinc-900 border border-zinc-800 rounded-md flex flex-col overflow-hidden">
+          <div className="px-4 py-2 border-b border-zinc-800 bg-zinc-900/50 shrink-0">
+            <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Performance Matrix</h3>
+          </div>
+          <div className="overflow-y-auto flex-grow">
+            <table className="w-full text-left text-[13px] whitespace-nowrap">
+              <thead className="sticky top-0 bg-zinc-900 z-10 shadow-[0_1px_0_#27272a]">
+                <tr>
+                  <th className="px-4 py-2 font-medium text-zinc-400">Product</th>
+                  <th className="px-4 py-2 font-medium text-zinc-400 text-right">1Mo Act</th>
+                  <th className="px-4 py-2 font-medium text-zinc-400 text-right">3Mo Act</th>
+                  <th className="px-4 py-2 font-medium text-zinc-300 text-right bg-zinc-800/30">YTD</th>
+                  <th className="px-4 py-2 font-medium text-indigo-400 text-right">RoY Proj</th>
+                  <th className="px-4 py-2 font-semibold text-zinc-100 text-right">Proj FY</th>
+                  <th className="px-4 py-2 font-medium text-zinc-500 text-right">Prior FY</th>
+                </tr>
+              </thead>
+              <tbody>
+                {processedData.rows.map((row) => (
+                  <tr key={row.product} className="hover:bg-zinc-800/50 transition-colors border-b border-zinc-800/50 last:border-0">
+                    <td className="px-4 py-3 font-medium text-zinc-200 flex items-center gap-2">
+                      <div className={`w-1 h-3 rounded-full ${adjustments[row.product] !== 0 ? 'bg-indigo-500' : 'bg-zinc-700'}`}></div>
+                      {row.product}
+                    </td>
+                    <td className="px-4 py-3 text-right text-zinc-400">{fmt(row['1Mo'])}</td>
+                    <td className="px-4 py-3 text-right text-zinc-400">{fmt(row['3Mo'])}</td>
+                    <td className="px-4 py-3 text-right font-medium text-zinc-300 bg-zinc-800/30">{fmt(row.YTD)}</td>
+                    
+                    <td className="px-4 py-3 text-right">
+                      {adjustments[row.product] !== 0 ? (
+                        <div className="flex flex-col items-end leading-tight">
+                          <span className="text-indigo-400 font-medium">{fmt(row.RoY_Tweaked)}</span>
+                          <span className="text-[10px] text-zinc-500 line-through">{fmt(row.RoY_Base)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-zinc-400">{fmt(row.RoY_Base)}</span>
+                      )}
+                    </td>
+                    
+                    <td className={`px-4 py-3 text-right font-semibold ${adjustments[row.product] !== 0 ? 'text-indigo-300 bg-indigo-900/10' : 'text-zinc-100'}`}>
+                      {fmt(row.ProjFY)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-zinc-500">{fmt(row.PriorFY)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-zinc-950 sticky bottom-0 border-t border-zinc-800 shadow-[0_-1px_0_#27272a]">
+                <tr>
+                  <td className="px-4 py-3 font-semibold text-zinc-300 text-xs uppercase tracking-wider">Total</td>
+                  <td className="px-4 py-3 text-right text-zinc-400 font-medium">{fmt(processedData.totals['1Mo'])}</td>
+                  <td className="px-4 py-3 text-right text-zinc-400 font-medium">{fmt(processedData.totals['3Mo'])}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-zinc-200 bg-zinc-800/30">{fmt(processedData.totals.YTD)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-indigo-400">{fmt(processedData.totals.RoY_Tweaked)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-zinc-100">{fmt(processedData.totals.ProjFY)}</td>
+                  <td className="px-4 py-3 text-right text-zinc-500 font-medium">{fmt(processedData.totals.PriorFY)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        {/* Right Column: Chart */}
+        <div className="w-[40%] bg-zinc-900 border border-zinc-800 rounded-md flex flex-col p-4">
+          <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-4 shrink-0">
+            {hasTweaks ? 'Scenario Analysis vs Base' : 'Projected vs Prior Year'}
+          </h3>
+          <div className="flex-grow w-full min-h-0 relative">
+            <div className="absolute inset-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={processedData.rows} margin={{ top: 10, right: 0, left: -20, bottom: 0 }} barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                  <XAxis dataKey="product" stroke="#71717a" tick={{fill: '#a1a1aa', fontSize: 11}} tickLine={false} axisLine={{stroke: '#3f3f46'}} />
+                  <YAxis stroke="#71717a" tick={{fill: '#71717a', fontSize: 11}} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
+                  <Tooltip 
+                    cursor={{fill: '#27272a', opacity: 0.5}}
+                    contentStyle={{ backgroundColor: '#18181b', borderColor: '#3f3f46', fontSize: '12px', padding: '8px' }}
+                    itemStyle={{ fontWeight: 500 }}
+                    formatter={(value) => fmt(value)}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '11px', color: '#a1a1aa' }} iconType="square" iconSize={8} />
+                  
+                  {hasTweaks ? (
+                    <>
+                      <Bar dataKey={(d) => d.YTD + d.RoY_Base} name="Base FY" fill="#3f3f46" radius={[2, 2, 0, 0]} maxBarSize={30} />
+                      <Bar dataKey="ProjFY" name="Modeled FY" fill="#6366f1" radius={[2, 2, 0, 0]} maxBarSize={30} />
+                    </>
+                  ) : (
+                    <>
+                      <Bar dataKey="PriorFY" name="Prior FY" fill="#3f3f46" radius={[2, 2, 0, 0]} maxBarSize={30} />
+                      <Bar dataKey="ProjFY" name="Projected FY" fill="#6366f1" radius={[2, 2, 0, 0]} maxBarSize={30} />
+                    </>
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {isTweakModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-lg shadow-2xl w-full max-w-sm">
+            
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-100 flex items-center gap-2">
+                  <SlidersHorizontal size={16} className="text-indigo-400"/>
+                  Adjust Projections
+                </h2>
+                <p className="text-[11px] text-zinc-500 mt-1">Modify Rest-of-Year expected performance</p>
+              </div>
+              <button 
+                onClick={() => setIsTweakModalOpen(false)} 
+                className="text-zinc-500 hover:text-zinc-200 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div className="space-y-5 mb-6">
+              {PRODUCTS.map(prod => (
+                <div key={prod}>
+                  <div className="flex justify-between text-xs mb-2">
+                    <span className="font-medium text-zinc-300">{prod}</span>
+                    <span className={`font-medium ${
+                      adjustments[prod] > 0 ? 'text-emerald-400' : 
+                      adjustments[prod] < 0 ? 'text-rose-400' : 'text-zinc-500'
+                    }`}>
+                      {adjustments[prod] > 0 ? '+' : ''}{adjustments[prod]}%
+                    </span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="-50" 
+                    max="50" 
+                    step="1"
+                    value={adjustments[prod]}
+                    onChange={(e) => handleTweakChange(prod, e.target.value)}
+                    className="w-full h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-indigo-500"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2 pt-4 border-t border-zinc-800">
+              <button 
+                onClick={resetTweaks} 
+                className="flex-1 py-2 rounded text-xs font-medium border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+              >
+                Reset
+              </button>
+              <button 
+                onClick={() => setIsTweakModalOpen(false)} 
+                className="flex-1 py-2 rounded text-xs font-medium bg-zinc-100 text-zinc-900 hover:bg-white transition-colors"
+              >
+                Apply
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
